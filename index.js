@@ -5,7 +5,7 @@ const monitor = require('active-window');
 let is_valheim = false;
 let config = {
     valheimAppName: 'valheim',
-    windowDetectionIntervalSec: 2,
+    windowDetectionIntervalSec: 1,
     hotkeys: {
         Q: {
             cmd: 'auto_run',
@@ -36,12 +36,13 @@ let config = {
 
 const autoplant = {
     toggle: function(handler) {
-        if (suspend.running) return;
-     
         if (this.running) {
             clearInterval(this.timer);
         } else {
-            this.timer = setInterval(this.callback, handler.intervalMs);
+            if (handler) {
+                this.intervalMs = handler.intervalMs;
+            }
+            this.timer = setInterval(this.callback, this.intervalMs);
         }
         this.running = !this.running;
         console.log('autoplant =', this.running);
@@ -50,26 +51,36 @@ const autoplant = {
     timer: undefined,
     callback: function() {
         robot.mouseClick();
-    }
+    },
+    intervalMs: 0
 };
 
 const autorun = {
     toggle: function(handler) {
-        if (suspend.running) return;
-        
+        if (handler) {
+            this.gameRunHotkey = handler.gameRunHotkey;
+        }
+
         if (this.running) {
-            robot.keyToggle(handler.gameRunHotkey, 'up');
+            robot.keyToggle(this.gameRunHotkey, 'up');
         } else {
-            robot.keyToggle(handler.gameRunHotkey, 'down');
+            robot.keyToggle(this.gameRunHotkey, 'down');
         }
         this.running = !this.running;
         console.log('autorun =', this.running);
     },
-    running: false
+    running: false,
+    gameRunHotkey: 'shift'
 };
 
 const suspend = {
     toggle: function () {
+        if (autorun.running) {
+            autorun.toggle();
+        }
+        if (autoplant.running) {
+            autoplant.toggle();
+        }
         this.running = !this.running;
         console.log('suspended =', this.running);
     },
@@ -83,8 +94,14 @@ monitor.getActiveWindow((window) => {
 
         if (is_valheim) {
             console.log("You're in Valheim... waking up");
+            if (suspend.running) {
+                suspend.toggle();
+            }
         } else {           
             console.log("You've left Valheim... going to sleep");
+            if (!suspend.running) {
+                suspend.toggle();
+            }
         }
     }
 }, -1, config.windowDetectionIntervalSec);
@@ -99,30 +116,33 @@ async function listen() {
         const handler = config.hotkeys[key];
         if (!handler) return;
 
-        switch (handler.cmd) {
-            case 'type_server':
-                if (suspend.running) break;
-                robot.typeString(handler.ip);
-                robot.keyTap('enter');
-                break;
-            case 'type_password':
-                if (suspend.running) break;
-                robot.typeString(handler.password);
-                robot.keyTap('enter');
-                break;
-            case 'suspend':
-                suspend.toggle();
-                break;
-            case 'auto_run':
-                autorun.toggle(handler);
-                break;
-            case 'multi_insert':
-                if (suspend.running) break;
-                robot.typeString(Array(handler.count).fill(handler.gameUseHotkey).join(''));
-                break;
-            case 'auto_plant':
-                autoplant.toggle(handler);
-                break;
+        if (suspend.running && 
+            handler.cmd === 'suspend')
+        {
+            suspend.toggle();
+        } else if (!suspend.running) {
+            switch (handler.cmd) {
+                case 'type_server':
+                    robot.typeString(handler.ip);
+                    robot.keyTap('enter');
+                    break;
+                case 'type_password':
+                    robot.typeString(handler.password);
+                    robot.keyTap('enter');
+                    break;
+                case 'suspend':
+                    suspend.toggle();
+                    break;
+                case 'auto_run':
+                    autorun.toggle(handler);
+                    break;
+                case 'multi_insert':
+                    robot.typeString(Array(handler.count).fill(handler.gameUseHotkey).join(''));
+                    break;
+                case 'auto_plant':
+                    autoplant.toggle(handler);
+                    break;
+            }
         }
     });
 }

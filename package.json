@@ -1,6 +1,6 @@
 {
   "name": "valheim-hotkeys",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Hotkeys for auto-run, multi-insert or auto-plant while playing Valheim.",
   "main": "index.js",
   "scripts": {
